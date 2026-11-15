@@ -48,6 +48,19 @@
   const textById = id => window.GREEK_TEXTS.find(t => t.id === id);
   const textQuestions = txt => txt.questions.map((q, i) => ({ ...q, id: txt.id + "q" + i, textId: txt.id }));
 
+  // ---------- Ύλη που έχει διδαχτεί ----------
+  const allTopics = subject => (subject === "math" ? window.MATH_TOPICS : window.GREEK_TOPICS).map(t => t.id);
+  const sylList = subject => (store.syllabus && store.syllabus[subject]) || null; // null = όλη η ύλη
+  const inSyl = (subject, t) => { const l = sylList(subject); return !l || l.includes(t); };
+  const sylCount = subject => { const l = sylList(subject); return l ? l.length : allTopics(subject).length; };
+  function genFromSyllabus() {
+    for (const t of shuffle(allTopics("math").filter(t => inSyl("math", t)))) {
+      const g = window.generateMathQuestion(t);
+      if (g) return g;
+    }
+    return null;
+  }
+
   function mathPool(topic, d) {
     return window.MATH_BANK.filter(q => (!topic || topic === "all" || q.t === topic) && (!d || q.d === d));
   }
@@ -67,11 +80,14 @@
         if (!g) break;
         srcs.push(g);
       }
-      if (topic === "all" || !topic) srcs = shuffle(srcs.slice(0, count - 3).concat([1, 2, 3].map(() => window.generateMathQuestion())));
+      if (topic === "all" || !topic) {
+        const gen = [1, 2, 3].map(genFromSyllabus).filter(Boolean);
+        srcs = shuffle(sample(mathPool("all").filter(q => inSyl("math", q.t)), count - gen.length).concat(gen));
+      }
     } else if (topic && topic.startsWith("text:")) {
       srcs = textQuestions(textById(topic.slice(5)));
     } else {
-      srcs = sample(topic === "all" ? window.GREEK_BANK : greekPool(topic), count);
+      srcs = sample(topic === "all" ? window.GREEK_BANK.filter(q => inSyl("greek", q.t)) : greekPool(topic), count);
     }
     return srcs.map(s => makeInstance(s, subject));
   }
@@ -79,20 +95,27 @@
   function buildExam(mode) {
     const qs = [];
     if (mode === "full" || mode === "greek") {
-      const texts = sample(window.GREEK_TEXTS, 2);
+      // Τα κείμενα κατανόησης μπαίνουν μόνο αν η «Κατανόηση κειμένου» είναι στην ύλη.
+      const texts = inSyl("greek", "comprehension") ? sample(window.GREEK_TEXTS, 2) : [];
       const tq = texts.flatMap(textQuestions);
       const d1 = tq.filter(q => q.d === 1).length;
       const need1 = Math.max(0, 10 - d1), need2 = Math.max(0, 10 - (tq.length - d1));
-      const g = sample(window.GREEK_BANK.filter(q => q.d === 1), need1).concat(sample(window.GREEK_BANK.filter(q => q.d === 2), need2));
+      const bank = window.GREEK_BANK.filter(q => inSyl("greek", q.t));
+      const g = sample(bank.filter(q => q.d === 1), need1).concat(sample(bank.filter(q => q.d === 2), need2));
       tq.concat(g).forEach(s => qs.push(makeInstance(s, "greek")));
     }
     if (mode === "full" || mode === "math") {
-      const gen = [0, 1, 2].map(() => window.generateMathQuestion());
-      const a = sample(mathPool("all", 1), 10 - gen.length).concat(gen);
-      const b = sample(mathPool("all", 2), 10);
+      const pool = mathPool("all").filter(q => inSyl("math", q.t));
+      const gen = [0, 1, 2].map(genFromSyllabus).filter(Boolean);
+      const a = sample(pool.filter(q => q.d === 1), 10 - gen.length).concat(gen);
+      // Αν η ύλη έχει λίγες ερωτήσεις Ομάδας Α, συμπληρώνουμε με νέες από τις γεννήτριες.
+      for (let k = 0; a.length < 10 && k < 30; k++) { const x = genFromSyllabus(); if (!x) break; if (!a.some(y => y.q === x.q)) a.push(x); }
+      const b = sample(pool.filter(q => q.d === 2), 10);
       a.concat(b).forEach(s => qs.push(makeInstance(s, "math")));
     }
-    const minutes = mode === "full" ? 150 : 75;
+    // Χρόνος: 75΄ ανά 20 ερωτήσεις, αναλογικά αν η ύλη δίνει λιγότερες.
+    const full = mode === "full" ? 40 : 20;
+    const minutes = qs.length >= full ? full * 3.75 : Math.max(10, Math.round((qs.length * 3.75) / 5) * 5);
     return { mode, qs, answers: qs.map(() => null), flags: qs.map(() => false), cur: 0, start: Date.now(), end: Date.now() + minutes * 60000, minutes };
   }
   const points = inst => (inst.d === 2 ? 3 : 2);
@@ -144,6 +167,7 @@ ${store.official ? `<a class="banner" href="#/past/${store.official.year}">⏱�
   <a class="card" href="#/mistakes"><div class="ic">🔁</div><h3>Τα λάθη μου</h3><p>${mistakes ? mistakes + " ερωτήσεις για επανάληψη" : "Εδώ θα μαζεύονται οι ερωτήσεις που έχασες"}</p></a>
   <a class="card" href="#/progress"><div class="ic">📊</div><h3>Η πρόοδός μου</h3><p>Επιτυχία ανά ενότητα και ιστορικό προσομοιώσεων</p></a>
   <a class="card" href="#/past"><div class="ic">🗂️</div><h3>Παλιά & ενδεικτικά θέματα</h3><p>Τα επίσημα θέματα 2020–2025 και 15 ενδεικτικά διαγωνίσματα, με χρονόμετρο και αυτόματη διόρθωση</p></a>
+  <a class="card" href="#/syllabus"><div class="ic">📋</div><h3>Η ύλη μου</h3><p>${sylCount("math") === allTopics("math").length && sylCount("greek") === allTopics("greek").length ? "Διάλεξε μόνο τις ενότητες που έχεις διδαχτεί" : sylCount("math") + " ενότητες Μαθηματικών και " + sylCount("greek") + " Γλώσσας"}</p></a>
   <a class="card" href="#/learn/math/tips"><div class="ic">💡</div><h3>Πώς είναι η εξέταση</h3><p>Δομή, βαθμολόγηση και στρατηγικές</p></a>
 </div>`;
   }
@@ -179,12 +203,13 @@ ${store.official ? `<a class="banner" href="#/past/${store.official.year}">⏱�
     const acc = (subject, t) => { const s = store.stats[subject + ":" + t]; return s && s.n ? `<span class="pct ${s.ok / s.n >= 0.7 ? "good" : s.ok / s.n >= 0.5 ? "mid" : "bad"}">${Math.round((100 * s.ok) / s.n)}%</span>` : ""; };
     app().innerHTML = `<h1>✏️ Εξάσκηση</h1>
 <p class="muted">Διάλεξε ενότητα. Κάθε σειρά έχει έως 10 ερωτήσεις. Μετά από κάθε απάντηση βλέπεις αμέσως αν ήταν σωστή και τη λύση.</p>
+${sylSummary()}
 <div class="two-col">
   <section>
     <h2>📐 Μαθηματικά</h2>
     <div class="list">
       <a class="list-item hl" href="#/practice/math/all"><span>🎲 Ανάμεικτες ερωτήσεις</span><span class="arrow">›</span></a>
-      ${window.MATH_TOPICS.map(t => `<a class="list-item" href="#/practice/math/${t.id}"><span>${t.title}</span><small>${count("math", t.id)}+</small>${acc("math", t.id)}<span class="arrow">›</span></a>`).join("")}
+      ${window.MATH_TOPICS.map(t => `<a class="list-item${inSyl("math", t.id) ? "" : " off"}" href="#/practice/math/${t.id}"><span>${t.title}${inSyl("math", t.id) ? "" : " <small>(εκτός ύλης)</small>"}</span><small>${count("math", t.id)}+</small>${acc("math", t.id)}<span class="arrow">›</span></a>`).join("")}
     </div>
   </section>
   <section>
@@ -196,7 +221,7 @@ ${store.official ? `<a class="banner" href="#/past/${store.official.year}">⏱�
     <h3>Γραμματική & λεξιλόγιο</h3>
     <div class="list">
       <a class="list-item hl" href="#/practice/greek/all"><span>🎲 Ανάμεικτες ερωτήσεις</span><span class="arrow">›</span></a>
-      ${window.GREEK_TOPICS.filter(t => t.id !== "comprehension").map(t => `<a class="list-item" href="#/practice/greek/${t.id}"><span>${t.title}</span><small>${count("greek", t.id)}</small>${acc("greek", t.id)}<span class="arrow">›</span></a>`).join("")}
+      ${window.GREEK_TOPICS.filter(t => t.id !== "comprehension").map(t => `<a class="list-item${inSyl("greek", t.id) ? "" : " off"}" href="#/practice/greek/${t.id}"><span>${t.title}${inSyl("greek", t.id) ? "" : " <small>(εκτός ύλης)</small>"}</span><small>${count("greek", t.id)}</small>${acc("greek", t.id)}<span class="arrow">›</span></a>`).join("")}
     </div>
   </section>
 </div>`;
@@ -265,12 +290,17 @@ ${store.official ? `<a class="banner" href="#/past/${store.official.year}">⏱�
     app().innerHTML = `<h1>⏱️ Προσομοίωση εξέτασης</h1>
 <p class="muted">Οι προσομοιώσεις ακολουθούν τη δομή των εξετάσεων: σε κάθε μάθημα 10 ερωτήσεις Ομάδας Α (2 μονάδες) και 10 ερωτήσεις Ομάδας Β (3 μονάδες, πιο απαιτητικές). Οι απαντήσεις και οι λύσεις εμφανίζονται στο τέλος.</p>
 ${store.exam ? `<a class="banner" href="#/exam/run">⏱️ Έχεις μια προσομοίωση σε εξέλιξη. Συνέχισε!</a>` : ""}
+${sylSummary()}
 <div class="grid">
   <button class="card exam" data-mode="full"><div class="ic">🎓</div><h3>Πλήρης εξέταση</h3><p>40 ερωτήσεις (20 Γλώσσα + 20 Μαθηματικά)<br><b>150 λεπτά · 100 μονάδες</b></p></button>
   <button class="card math" data-mode="math"><div class="ic">📐</div><h3>Μόνο Μαθηματικά</h3><p>20 ερωτήσεις<br><b>75 λεπτά · 50 μονάδες</b></p></button>
   <button class="card greek" data-mode="greek"><div class="ic">📚</div><h3>Μόνο Γλώσσα</h3><p>2 κείμενα + 10 ερωτήσεις γραμματικής<br><b>75 λεπτά · 50 μονάδες</b></p></button>
 </div>
 <div class="note"><b>Συμβουλές:</b> Βρες ένα ήσυχο μέρος, έχε πρόχειρο χαρτί και μολύβι και μη χρησιμοποιήσεις κομπιουτεράκι. Αν κολλήσεις σε μια ερώτηση, σημείωσέ την με 🚩 και γύρνα αργότερα.</div>`;
+    app().querySelectorAll("[data-mode]").forEach(b => {
+      const m = b.dataset.mode;
+      if ((m !== "greek" && !sylCount("math")) || (m !== "math" && !sylCount("greek"))) { b.disabled = true; b.title = "Δεν έχει επιλεγεί ύλη"; }
+    });
     app().querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => {
       if (store.exam && !confirmInline(b, "Θα χαθεί η προσομοίωση που είναι σε εξέλιξη. Πάτα ξανά για επιβεβαίωση.")) return;
       store.exam = buildExam(b.dataset.mode); save();
@@ -624,6 +654,47 @@ ${ex.total > ex.greek ? `<h3>📐 Μαθηματικά</h3><div class="rgrid">${
     window.scrollTo(0, 0);
   }
 
+  function sylSummary() {
+    const m = sylCount("math"), g = sylCount("greek");
+    const M = allTopics("math").length, G = allTopics("greek").length;
+    if (m === M && g === G) return `<div class="note">📋 Οι ερωτήσεις έρχονται από όλη την ύλη. <a href="#/syllabus">Διάλεξε μόνο όσα έχεις διδαχτεί</a>.</div>`;
+    return `<div class="note">📋 <b>Η ύλη μου:</b> ${m}/${M} ενότητες Μαθηματικών, ${g}/${G} ενότητες Γλώσσας. Οι προσομοιώσεις και οι ανάμεικτες ερωτήσεις έχουν μόνο αυτές. <a href="#/syllabus">Αλλαγή</a></div>`;
+  }
+
+  function syllabus() {
+    nav("syllabus");
+    const col = (subject, icon) => {
+      const list = subject === "math" ? window.MATH_TOPICS : window.GREEK_TOPICS;
+      const n = subject === "math" ? (t => mathPool(t).length) : (t => greekPool(t).length);
+      return `<section>
+    <h2>${icon} ${SUBJ[subject]}</h2>
+    <div class="actions"><button class="btn small" data-all="${subject}">Όλες</button><button class="btn small" data-none="${subject}">Καμία</button></div>
+    <div class="list">${list.map(t => `<label class="list-item check"><input type="checkbox" data-s="${subject}" value="${t.id}" ${inSyl(subject, t.id) ? "checked" : ""}><span>${t.title}</span><small>${n(t.id)} ερ.</small></label>`).join("")}</div>
+  </section>`;
+    };
+    app().innerHTML = `<h1>📋 Η ύλη μου</h1>
+<p class="muted">Τσέκαρε τις ενότητες που έχει διδαχτεί το παιδί μέχρι τώρα. Οι προσομοιώσεις και οι ανάμεικτες ερωτήσεις της εξάσκησης θα έχουν μόνο αυτές. Οι υπόλοιπες ενότητες μένουν διαθέσιμες στην εξάσκηση ανά ενότητα. Αν η ύλη είναι μικρή, η προσομοίωση βγαίνει με λιγότερες ερωτήσεις και λιγότερο χρόνο.</p>
+<div class="two-col">${col("math", "📐")}${col("greek", "📚")}</div>
+<p id="sylmsg" class="muted"></p>
+<div class="actions"><a class="btn primary" href="#/exam">⏱️ Προσομοίωση</a><a class="btn" href="#/practice">✏️ Εξάσκηση</a></div>`;
+    const write = () => {
+      const syl = {};
+      ["math", "greek"].forEach(s => {
+        const on = [...app().querySelectorAll(`input[data-s="${s}"]:checked`)].map(i => i.value);
+        syl[s] = on.length === allTopics(s).length ? null : on;
+      });
+      store.syllabus = syl.math || syl.greek ? syl : null;
+      save();
+      $("#sylmsg").textContent = "✔️ Αποθηκεύτηκε: " + sylCount("math") + " ενότητες Μαθηματικών, " + sylCount("greek") + " ενότητες Γλώσσας.";
+    };
+    app().querySelectorAll("input[data-s]").forEach(i => i.addEventListener("change", write));
+    app().querySelectorAll("[data-all],[data-none]").forEach(b => b.addEventListener("click", () => {
+      const s = b.dataset.all || b.dataset.none;
+      app().querySelectorAll(`input[data-s="${s}"]`).forEach(i => { i.checked = !!b.dataset.all; });
+      write();
+    }));
+  }
+
   function notFound() { app().innerHTML = `<div class="empty">Η σελίδα δεν βρέθηκε. <a href="#/">Αρχική</a></div>`; }
 
   // ---------- Δρομολόγηση ----------
@@ -643,6 +714,7 @@ ${ex.total > ex.greek ? `<h3>📐 Μαθηματικά</h3><div class="rgrid">${
       return examMenu();
     }
     if (a === "mistakes") return mistakes();
+    if (a === "syllabus") return syllabus();
     if (a === "progress") return progress();
     if (a === "past") return b === "result" ? pastResult() : b ? pastSetup(b) : past();
     notFound();
