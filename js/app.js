@@ -135,7 +135,7 @@
   </div>
 </section>
 ${store.exam ? `<a class="banner" href="#/exam/run">⏱️ Έχεις μια προσομοίωση σε εξέλιξη. Συνέχισε!</a>` : ""}
-${store.official ? `<a class="banner" href="#/past/${store.official.year}">⏱️ Έχεις τα θέματα ${store.official.year} σε εξέλιξη. Συνέχισε!</a>` : ""}
+${store.official ? `<a class="banner" href="#/past/${store.official.year}">⏱️ Έχεις μισοτελειωμένα θέματα. Συνέχισε!</a>` : ""}
 <div class="grid">
   <a class="card math" href="#/learn/math"><div class="ic">📐</div><h3>Θεωρία Μαθηματικών</h3><p>10 ενότητες με κανόνες και λυμένα παραδείγματα</p></a>
   <a class="card greek" href="#/learn/greek"><div class="ic">📚</div><h3>Θεωρία Γλώσσας</h3><p>Κατανόηση κειμένου, γραμματική, σύνταξη, λεξιλόγιο</p></a>
@@ -143,7 +143,7 @@ ${store.official ? `<a class="banner" href="#/past/${store.official.year}">⏱�
   <a class="card exam" href="#/exam"><div class="ic">⏱️</div><h3>Προσομοίωση εξέτασης</h3><p>40 ερωτήσεις, 150 λεπτά, όπως στις πραγματικές εξετάσεις</p></a>
   <a class="card" href="#/mistakes"><div class="ic">🔁</div><h3>Τα λάθη μου</h3><p>${mistakes ? mistakes + " ερωτήσεις για επανάληψη" : "Εδώ θα μαζεύονται οι ερωτήσεις που έχασες"}</p></a>
   <a class="card" href="#/progress"><div class="ic">📊</div><h3>Η πρόοδός μου</h3><p>Επιτυχία ανά ενότητα και ιστορικό προσομοιώσεων</p></a>
-  <a class="card" href="#/past"><div class="ic">🗂️</div><h3>Επίσημα θέματα 2020–2025</h3><p>Λύσε τα πραγματικά θέματα με χρονόμετρο και αυτόματη διόρθωση</p></a>
+  <a class="card" href="#/past"><div class="ic">🗂️</div><h3>Παλιά & ενδεικτικά θέματα</h3><p>Τα επίσημα θέματα 2020–2025 και 15 ενδεικτικά διαγωνίσματα, με χρονόμετρο και αυτόματη διόρθωση</p></a>
   <a class="card" href="#/learn/math/tips"><div class="ic">💡</div><h3>Πώς είναι η εξέταση</h3><p>Δομή, βαθμολόγηση και στρατηγικές</p></a>
 </div>`;
   }
@@ -439,7 +439,7 @@ ${list.length ? `<p class="muted">Έχεις ${list.length} ερωτήσεις �
 </div>
 <h2>Ιστορικό προσομοιώσεων</h2>
 ${store.history.length ? `<table class="tbl"><tr><th>Ημερομηνία</th><th>Είδος</th><th>Γλώσσα</th><th>Μαθ.</th><th>Σύνολο</th><th>Χρόνος</th></tr>
-${store.history.slice().reverse().map(h => `<tr><td>${new Date(h.date).toLocaleDateString("el-GR")}</td><td>${modeName[h.mode] || (h.mode.startsWith("past") ? "Θέματα " + h.mode.slice(4) : h.mode)}</td><td>${h.greek ?? "–"}</td><td>${h.math ?? "–"}</td><td><b>${h.score}/${h.max}</b></td><td>${h.mins}΄</td></tr>`).join("")}</table>` : `<p class="muted">Δεν έχεις κάνει ακόμη προσομοίωση.</p>`}
+${store.history.slice().reverse().map(h => `<tr><td>${new Date(h.date).toLocaleDateString("el-GR")}</td><td>${modeName[h.mode] || (h.mode.startsWith("past") ? ((pastByYear(h.mode.slice(4)) || {}).title || h.mode.slice(4)) : h.mode)}</td><td>${h.greek ?? "–"}</td><td>${h.math ?? "–"}</td><td><b>${h.score}/${h.max}</b></td><td>${h.mins}΄</td></tr>`).join("")}</table>` : `<p class="muted">Δεν έχεις κάνει ακόμη προσομοίωση.</p>`}
 <div class="actions"><button class="btn small danger" id="reset">Διαγραφή όλης της προόδου</button></div>`;
     $("#reset").addEventListener("click", e => {
       if (!confirmInline(e.currentTarget, "Πάτα ξανά για να διαγραφούν όλα τα στατιστικά, τα λάθη και το ιστορικό.")) return;
@@ -448,33 +448,48 @@ ${store.history.slice().reverse().map(h => `<tr><td>${new Date(h.date).toLocaleD
   }
 
   // ---------- Επίσημα θέματα προηγούμενων ετών ----------
-  const pastByYear = y => (window.PAST_EXAMS || []).find(e => String(e.year) === String(y));
+  const allPast = () => (window.PAST_EXAMS || []).concat(window.SAMPLE_EXAMS || []);
+  const pastByYear = y => allPast().find(e => String(e.year) === String(y));
   const isGroupB = (ex, n) => (ex.groupB || []).some(([a, b]) => n >= a && n <= b);
   const pastPoints = (ex, n) => (ex.groupB ? (isGroupB(ex, n) ? 3 : 2) : 2);
   const pastChoices = (ex, n) => (ex.groupB && isGroupB(ex, n) ? 5 : 4);
+  const graded = (ex, i) => ex.key[i] !== "-";
+  const isRight = (ex, a, i) => a !== null && LETTERS[a] === ex.key[i];
+  const range = (a, b) => (b < a ? [] : Array.from({ length: b - a + 1 }, (_, i) => a + i));
+  const pagesHtml = ex => range(1, ex.pages).map(p => `<img src="past/${ex.year}/page${p}.jpg" alt="${ex.title}, σελίδα ${p}" loading="lazy">`).join("");
 
   function past() {
     nav("past");
     const done = y => store.history.filter(h => h.mode === "past" + y);
+    const best = e => { const h = done(e.year); return h.length ? `<p><b>Καλύτερη επίδοση: ${Math.max(...h.map(x => x.score))}/100</b> (${h.length} ${h.length === 1 ? "φορά" : "φορές"})</p>` : ""; };
     const links = [
       ["Όλα τα θέματα (σελίδα ΔΕΠΠΣ)", "https://depps.minedu.gov.gr/?page_id=7669"],
       ["Ενδεικτικά θέματα 2021", "https://depps.minedu.gov.gr/?page_id=10245"],
       ["Ενδεικτικά θέματα 2020", "https://depps.minedu.gov.gr/?page_id=9705"]
     ];
+    const sampleRow = e => {
+      const h = done(e.year), b = h.length ? Math.max(...h.map(x => x.score)) : null;
+      return `<a class="list-item" href="#/past/${e.year}"><span>${e.title}<br><small>${e.total} ερωτήσεις · ~${e.minutes}΄${e.keySource === "app" ? " · λύσεις της εφαρμογής" : ""}</small></span>${b !== null ? `<span class="pct ${b >= 70 ? "good" : b >= 50 ? "mid" : "bad"}">${b}/100</span>` : ""}<span class="arrow">›</span></a>`;
+    };
+    const S = window.SAMPLE_EXAMS || [];
     app().innerHTML = `<h1>🗂️ Παλιά θέματα</h1>
-<p class="muted">Τα επίσημα θέματα των εξετάσεων για τα Πρότυπα Γυμνάσια, όπως τα δημοσίευσε η ΔΕΠΠΣ του Υπουργείου Παιδείας. Λύσε τα στην εφαρμογή με χρονόμετρο: βλέπεις τις σελίδες των θεμάτων, συμπληρώνεις το φύλλο απαντήσεων και στο τέλος η εφαρμογή διορθώνει με τις επίσημες απαντήσεις.</p>
-${store.official ? `<a class="banner" href="#/past/${store.official.year}">⏱️ Έχεις τα θέματα ${store.official.year} σε εξέλιξη. Συνέχισε!</a>` : ""}
-<div class="grid">${window.PAST_EXAMS.map(e => {
-      const h = done(e.year), best = h.length ? Math.max(...h.map(x => x.score)) : null;
-      return `<div class="card exam past-card">
-  <h3>📝 Εξετάσεις ${e.year}</h3>
+<p class="muted">Τα επίσημα θέματα των εξετάσεων για τα Πρότυπα Γυμνάσια, όπως τα δημοσίευσε η ΔΕΠΠΣ του Υπουργείου Παιδείας. Λύσε τα στην εφαρμογή με χρονόμετρο: βλέπεις τις σελίδες των θεμάτων, συμπληρώνεις το φύλλο απαντήσεων και στο τέλος η εφαρμογή τα διορθώνει.</p>
+${store.official ? `<a class="banner" href="#/past/${store.official.year}">⏱️ Έχεις μισοτελειωμένα θέματα: ${(pastByYear(store.official.year) || {}).title}. Συνέχισε!</a>` : ""}
+<h2>Επίσημες εξετάσεις</h2>
+<div class="grid">${window.PAST_EXAMS.map(e => `<div class="card exam past-card">
+  <h3>📝 ${e.title}</h3>
   <p>${e.note}</p>
-  ${best !== null ? `<p><b>Καλύτερη επίδοση: ${best}/100</b> (${h.length} ${h.length === 1 ? "φορά" : "φορές"})</p>` : ""}
+  ${best(e)}
   <div class="actions"><a class="btn primary small" href="#/past/${e.year}">Λύσε τα θέματα</a>
   <a class="btn small" href="past/${e.year}/themata-${e.year}.pdf" target="_blank" rel="noopener">PDF θεμάτων</a>
   <a class="btn small" href="past/${e.year}/apantiseis-${e.year}.pdf" target="_blank" rel="noopener">PDF απαντήσεων</a></div>
-</div>`;
-    }).join("")}</div>
+</div>`).join("")}</div>
+${S.length ? `<h2>Ενδεικτικά θέματα</h2>
+<p class="muted">Μικρότερα διαγωνίσματα για εξάσκηση ανά μάθημα. Όπου το έγγραφο δεν είχε απαντήσεις, τις έχει γράψει η εφαρμογή και σημειώνεται «λύσεις της εφαρμογής». Ερωτήσεις με περισσότερες από μία σωστές απαντήσεις δεν βαθμολογούνται.</p>
+<div class="two-col">
+  <section><h3>📚 Γλώσσα</h3><div class="list">${S.filter(e => e.subject === "greek").map(sampleRow).join("")}</div></section>
+  <section><h3>📐 Μαθηματικά</h3><div class="list">${S.filter(e => e.subject === "math").map(sampleRow).join("")}</div></section>
+</div>` : ""}
 <h2>Στον ιστότοπο του Υπουργείου</h2>
 <div class="list">${links.map(([t, u]) => `<a class="list-item" href="${u}" target="_blank" rel="noopener"><span>📄 ${t}</span><span class="arrow">↗</span></a>`).join("")}</div>`;
   }
@@ -484,16 +499,17 @@ ${store.official ? `<a class="banner" href="#/past/${store.official.year}">⏱�
     const ex = pastByYear(year);
     if (!ex) return notFound();
     if (store.official && String(store.official.year) === String(year)) return pastRun();
+    const order = ex.sample
+      ? `Έχει ${ex.total} ερωτήσεις ${ex.subject === "greek" ? "Γλώσσας" : "Μαθηματικών"}.`
+      : `Πρώτα είναι οι ερωτήσεις Γλώσσας (1–${ex.greek}) και μετά των Μαθηματικών (${ex.greek + 1}–${ex.total}).`;
+    const times = ex.sample ? [ex.minutes, 0] : [150, 120, 0];
     app().innerHTML = `<a class="back" href="#/past">‹ Παλιά θέματα</a>
-<h1>📝 Θέματα ${ex.year}</h1>
-<p>${ex.note}</p>
-<p class="muted">Πρώτα είναι οι ερωτήσεις Γλώσσας (1–${ex.greek}) και μετά των Μαθηματικών (${ex.greek + 1}–${ex.total}). Διάβασε τα θέματα στις σελίδες και σημείωσε την απάντησή σου στο φύλλο απαντήσεων.</p>
-${store.official ? `<p class="warn">Έχεις ήδη τα θέματα ${store.official.year} σε εξέλιξη. Αν ξεκινήσεις νέα, θα χαθούν.</p>` : ""}
-<div class="actions">
-  <button class="btn primary" data-min="150">⏱️ Με χρονόμετρο 150 λεπτών</button>
-  <button class="btn" data-min="120">⏱️ Με χρονόμετρο 120 λεπτών</button>
-  <button class="btn" data-min="0">Χωρίς χρονόμετρο</button>
-</div>`;
+<h1>📝 ${ex.title}</h1>
+${ex.note ? `<p>${ex.note}</p>` : ""}
+<p class="muted">${order} Διάβασε τα θέματα στις σελίδες και σημείωσε την απάντησή σου στο φύλλο απαντήσεων.</p>
+${ex.keySource === "app" ? `<p class="note">Το έγγραφο δεν είχε απαντήσεις, οπότε τις έγραψε η εφαρμογή. ${ex.key.includes("-") ? "Οι ερωτήσεις που μπορούν να έχουν δύο σωστές απαντήσεις δεν βαθμολογούνται." : ""}</p>` : ""}
+${store.official ? `<p class="warn">Έχεις ήδη άλλα θέματα σε εξέλιξη. Αν ξεκινήσεις αυτά, θα χαθούν.</p>` : ""}
+<div class="actions">${times.map((m, i) => `<button class="btn ${i === 0 ? "primary" : ""}" data-min="${m}">${m ? `⏱️ Με χρονόμετρο ${m} λεπτών` : "Χωρίς χρονόμετρο"}</button>`).join("")}</div>`;
     app().querySelectorAll("[data-min]").forEach(b => b.addEventListener("click", () => {
       const m = +b.dataset.min;
       store.official = { year: ex.year, answers: Array(ex.total).fill(null), start: Date.now(), end: m ? Date.now() + m * 60000 : null };
@@ -504,27 +520,27 @@ ${store.official ? `<p class="warn">Έχεις ήδη τα θέματα ${store.
   function pastRun() {
     nav("past");
     const st = store.official, ex = pastByYear(st.year);
+    if (!ex) { store.official = null; save(); return past(); }
     if (st.end && Date.now() >= st.end) return pastSubmit(true);
     const answered = st.answers.filter(a => a !== null).length;
     const row = n => {
       const k = pastChoices(ex, n), a = st.answers[n - 1];
       return `<div class="sheet-row" id="sr${n}"><span class="sheet-n">${n}</span>${LETTERS.slice(0, k).map((L, i) => `<button class="bubble ${a === i ? "on" : ""}" data-q="${n}" data-l="${i}" aria-label="Ερώτηση ${n}, ${L}">${L}</button>`).join("")}</div>`;
     };
-    const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+    const sections = [];
+    if (ex.greek) sections.push(`<h3>📚 Γλώσσα</h3>${range(1, ex.greek).map(row).join("")}`);
+    if (ex.total > ex.greek) sections.push(`<h3>📐 Μαθηματικά</h3>${range(ex.greek + 1, ex.total).map(row).join("")}`);
     app().innerHTML = `<div class="exam-bar">
-  <span class="timer" id="timer">${st.end ? "⏱️ " + fmtTime(st.end - Date.now()) : "Θέματα " + st.year}</span>
+  <span class="timer" id="timer">${st.end ? "⏱️ " + fmtTime(st.end - Date.now()) : ex.title}</span>
   <span>Απαντήθηκαν: <b id="cnt">${answered}/${ex.total}</b></span>
   <button class="btn small danger" id="submit">Παράδοση</button>
 </div>
 <div id="confirm"></div>
 <div class="past-layout">
-  <div class="pages">${range(1, ex.pages).map(p => `<img src="past/${ex.year}/page${p}.jpg" alt="Θέματα ${ex.year}, σελίδα ${p}" loading="lazy">`).join("")}</div>
+  <div class="pages">${pagesHtml(ex)}</div>
   <aside class="sheet" id="sheet">
     <button class="sheet-toggle" id="sheetToggle">📝 Φύλλο απαντήσεων <span id="cnt2">${answered}/${ex.total}</span></button>
-    <div class="sheet-body">
-      <h3>📚 Γλώσσα</h3>${range(1, ex.greek).map(row).join("")}
-      <h3>📐 Μαθηματικά</h3>${range(ex.greek + 1, ex.total).map(row).join("")}
-    </div>
+    <div class="sheet-body">${sections.join("")}</div>
   </aside>
 </div>`;
     app().querySelectorAll(".bubble").forEach(b => b.addEventListener("click", () => {
@@ -560,14 +576,15 @@ ${store.official ? `<p class="warn">Έχεις ήδη τα θέματα ${store.
     const ex = pastByYear(st.year);
     let g = 0, m = 0, gMax = 0, mMax = 0;
     st.answers.forEach((a, i) => {
-      const n = i + 1, p = pastPoints(ex, n), ok = a !== null && LETTERS[a] === ex.key[i];
+      if (!graded(ex, i)) return;
+      const n = i + 1, p = pastPoints(ex, n), ok = isRight(ex, a, i);
       if (n <= ex.greek) { gMax += p; if (ok) g += p; } else { mMax += p; if (ok) m += p; }
     });
-    // κλίμακα στο 100 (στα παλιά θέματα κάθε μάθημα έχει 25 ερωτήσεις των 2 μονάδων)
-    const scale = 100 / (gMax + mMax);
-    const entry = { date: Date.now(), mode: "past" + st.year, score: Math.round((g + m) * scale), max: 100, greek: Math.round(g * scale), math: Math.round(m * scale), mins: Math.round(((st.end ? Math.min(Date.now(), st.end) : Date.now()) - st.start) / 60000) };
+    // κλίμακα 0–100
+    const scale = 100 / Math.max(1, gMax + mMax);
+    const entry = { date: Date.now(), mode: "past" + st.year, score: Math.round((g + m) * scale), max: 100, greek: gMax ? Math.round(g * scale) : null, math: mMax ? Math.round(m * scale) : null, mins: Math.round(((st.end ? Math.min(Date.now(), st.end) : Date.now()) - st.start) / 60000) };
     store.history.push(entry);
-    store.lastOfficial = { ...st, timeUp, entry, gMax: Math.round(gMax * scale), mMax: Math.round(mMax * scale) };
+    store.lastOfficial = { ...st, timeUp, entry, gMax: Math.round(gMax * scale), mMax: Math.round(mMax * scale), right: { g: g / 2, m: m / 2 } };
     store.official = null; save();
     location.hash = "#/past/result";
     if (location.hash === "#/past/result") pastResult();
@@ -578,29 +595,32 @@ ${store.official ? `<p class="warn">Έχεις ήδη τα θέματα ${store.
     const r = store.lastOfficial;
     if (!r) { location.hash = "#/past"; return; }
     const ex = pastByYear(r.year), e = r.entry;
-    const cell = (n) => {
-      const a = r.answers[n - 1], k = ex.key[n - 1], ok = a !== null && LETTERS[a] === k;
+    if (!ex) { location.hash = "#/past"; return; }
+    const cell = n => {
+      const i = n - 1, a = r.answers[i], k = ex.key[i];
+      if (!graded(ex, i)) return `<div class="rcell skip"><b>${n}</b><span>${a === null ? "–" : LETTERS[a]}</span><small class="muted">δεν μετρά</small></div>`;
+      const ok = isRight(ex, a, i);
       return `<div class="rcell ${ok ? "ok" : a === null ? "skip" : "no"}"><b>${n}</b><span>${a === null ? "–" : LETTERS[a]}</span>${ok ? "" : `<small>σωστό: ${k}</small>`}</div>`;
     };
-    const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
-    const wrong = r.answers.filter((a, i) => !(a !== null && LETTERS[a] === ex.key[i])).length;
+    const wrong = r.answers.filter((a, i) => graded(ex, i) && !isRight(ex, a, i)).length;
+    const both = e.greek !== null && e.math !== null;
     app().innerHTML = `<div class="result-card">
   ${r.timeUp ? `<p class="warn">⏰ Ο χρόνος τελείωσε και τα θέματα παραδόθηκαν αυτόματα.</p>` : ""}
-  <p>Θέματα ${r.year}</p>
+  <p>${ex.title}</p>
   <div class="big">${e.score} <small>/ 100</small></div>
   <div class="stats-row">
-    <div class="stat"><b>${e.greek}/${r.gMax}</b><span>Γλώσσα</span></div>
-    <div class="stat"><b>${e.math}/${r.mMax}</b><span>Μαθηματικά</span></div>
+    ${both ? `<div class="stat"><b>${e.greek}/${r.gMax}</b><span>Γλώσσα</span></div><div class="stat"><b>${e.math}/${r.mMax}</b><span>Μαθηματικά</span></div>` : ""}
     <div class="stat"><b>${e.mins}΄</b><span>χρόνος</span></div>
   </div>
-  ${ex.groupB ? "" : `<p class="muted small">Στα θέματα ${r.year} κάθε ερώτηση μετρά το ίδιο. Η βαθμολογία έχει μετατραπεί σε κλίμακα 0–100.</p>`}
-  <div class="actions center"><a class="btn primary" href="#/past">Άλλη χρονιά</a><a class="btn" href="past/${r.year}/themata-${r.year}.pdf" target="_blank" rel="noopener">PDF θεμάτων</a></div>
+  ${ex.groupB ? "" : `<p class="muted small">Κάθε ερώτηση μετρά το ίδιο. Η βαθμολογία έχει μετατραπεί σε κλίμακα 0–100.</p>`}
+  ${ex.keySource === "app" ? `<p class="muted small">Οι σωστές απαντήσεις είναι λύσεις της εφαρμογής, γιατί το έγγραφο δεν είχε επίσημες.</p>` : ""}
+  <div class="actions center"><a class="btn primary" href="#/past">Άλλα θέματα</a><a class="btn" href="past/${r.year}/themata-${r.year}.pdf" target="_blank" rel="noopener">PDF θεμάτων</a></div>
 </div>
 <h2>Το φύλλο απαντήσεών σου</h2>
 <p class="muted">${wrong ? `Ξαναδές τις ${wrong} ερωτήσεις με κόκκινο ή γκρι στις σελίδες των θεμάτων.` : "🌟 Όλες σωστές!"}</p>
-<h3>📚 Γλώσσα</h3><div class="rgrid">${range(1, ex.greek).map(cell).join("")}</div>
-<h3>📐 Μαθηματικά</h3><div class="rgrid">${range(ex.greek + 1, ex.total).map(cell).join("")}</div>
-<details class="text-panel"><summary>📄 Σελίδες θεμάτων ${r.year}</summary><div class="pages">${range(1, ex.pages).map(p => `<img src="past/${ex.year}/page${p}.jpg" alt="Σελίδα ${p}" loading="lazy">`).join("")}</div></details>`;
+${ex.greek ? `<h3>📚 Γλώσσα</h3><div class="rgrid">${range(1, ex.greek).map(cell).join("")}</div>` : ""}
+${ex.total > ex.greek ? `<h3>📐 Μαθηματικά</h3><div class="rgrid">${range(ex.greek + 1, ex.total).map(cell).join("")}</div>` : ""}
+<details class="text-panel"><summary>📄 Σελίδες θεμάτων</summary><div class="pages">${pagesHtml(ex)}</div></details>`;
     window.scrollTo(0, 0);
   }
 
