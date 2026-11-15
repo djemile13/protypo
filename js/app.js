@@ -628,5 +628,5 @@ ${store.official ? `<p class="warn">Έχεις ήδη τα θέματα ${store.
     notFound();
   }
   window.addEventListener("hashchange", route);
-  document.addEventListener("DOMContentLoaded", route);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", route); else route();
 })();
