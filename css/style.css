@@ -271,3 +271,9 @@ main { padding-top: 16px; padding-bottom: 32px; min-height: 70vh; }
   .sheet-row { justify-content: flex-start; }
   .bubble { width: 40px; height: 40px; }
 }
+
+/* Η ύλη μου */
+.list-item.off { opacity: .6; }
+.list-item.check { cursor: pointer; }
+.list-item.check input { width: 20px; height: 20px; accent-color: var(--primary); flex: 0 0 auto; margin: 0; }
+button.card[disabled] { opacity: .45; cursor: default; }
